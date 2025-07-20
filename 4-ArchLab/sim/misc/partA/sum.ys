@@ -1,0 +1,33 @@
+# %rdi %rsi %rdx %rcx
+main:irmovq stack, %rsp
+    irmovq ls, %rdi  
+    call func
+    halt
+
+
+func:xorq %rax, %rax
+    loop:
+        mrmovq (%rdi), %r8  # value
+        mrmovq 8(%rdi), %rdi  # next 
+        addq %r8, %rax
+        andq %rdi, %rdi
+        jne loop
+    ret
+
+
+.pos 0x200
+stack:
+
+# Sample linked list
+.pos 0x1000
+.align 8
+ls:
+ele1:
+    .quad 0x00a
+    .quad ele2
+ele2:
+    .quad 0x0b0
+    .quad ele3
+ele3:
+    .quad 0xc00
+    .quad 0

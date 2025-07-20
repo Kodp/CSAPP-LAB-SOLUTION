@@ -1,0 +1,38 @@
+# %rdi %rsi %rdx %rcx
+main:
+    irmovq stack, %rsp
+    irmovq src, %rdi  
+    irmovq dest, %rsi  
+    irmovq 3, %rdx
+    call func
+    halt
+
+
+func:
+    xorq %rax, %rax
+    irmovq 8, %r14
+    irmovq 1, %r13
+    Loop:mrmovq (%rdi), %r8
+        rmmovq %r8, (%rsi)
+        addq %r14, %rdi
+        addq %r14, %rsi
+        xorq %r8, %rax
+        subq %r13, %rdx
+        jg Loop
+    ret
+
+.pos 0x100
+stack:
+
+.pos 0x200
+.align 8
+# Source block
+src:
+    .quad 0x00a
+    .quad 0x0b0
+    .quad 0xc00
+# Destination block
+dest:
+    .quad 0x111
+    .quad 0x222
+    .quad 0x333

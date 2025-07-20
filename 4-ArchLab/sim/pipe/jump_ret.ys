@@ -1,0 +1,52 @@
+# 测试分支预测错误与ret指令交互的关键测试
+irmovq stack, %rsp  # 初始化栈指针
+irmovq $1, %rax    # %rax = 1
+irmovq $1, %rbx    # %rbx = 1
+xorq %rax, %rax    # 设置ZF=1 (异或自身)
+call tricky_func   # 调用关键测试函数
+halt
+
+# 关键测试函数
+tricky_func:
+    # 设置条件：ZF=0
+    irmovq $1, %rcx     # 为后续设置条件码做准备
+    
+    # 1. 创建一个分支预测错误场景
+    subq %rcx, %rbx    # %rbx=0-1=-1, 设置SF=1, OF=0, ZF=0
+    jle bad_prediction # 实际不会跳转(ZF=0且SF=1=>1=0不成立)
+    
+    # 2. 在分支指令后放置关键操作
+    irmovq $0x1234, %rdi  # 应执行的指令
+    ret                  # 关键：此时ret已在流水线D阶段
+    
+    # 分支预测错误目标（不应执行）
+    bad_prediction:
+        irmovq $0x5678, %rdi  # 错误值标记
+        irmovq $0xabcd, %rsi  # 错误值标记
+        ret                  # 分支预测错误时的返回
+
+# 用于验证的二级函数
+validate:
+    # 验证执行路径的关键检查点
+    # 1. 检查%rdi应为0x1234 (正确路径)
+    irmovq $0x1234, %rbx
+    subq %rdi, %rbx
+    je good_path
+    
+    # 2. 否则检测到错误路径执行
+    bad_path:
+        irmovq $0xdead, %rax  # 错误检测值
+        halt
+    
+    # 3. 正确路径
+    good_path:
+        irmovq $0xc0de, %rax  # 正确检测值
+        ret
+
+# 返回地址处理函数
+return_handler:
+    call validate      # 执行验证逻辑
+    halt
+
+.pos 0x100
+stack: # 栈起始位置

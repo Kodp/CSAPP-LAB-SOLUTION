@@ -1,0 +1,116 @@
+#/* $begin ncopy-ys */
+##################################################################
+# ncopy.ys - Copy a src block of len words to dst.
+# Return the number of positive words (>0) contained in src.
+#
+# Include your name and ID here.
+#
+# Describe how and why you modified the baseline code.
+#
+##################################################################
+# Do not modify this portion
+# Function prologue.
+# %rdi = src, %rsi = dst, %rdx = len
+ncopy:
+
+##################################################################
+# rbx, rcx, rbp, r8, r9, r10, r11, r12, r13, r14
+# 不依赖硬编码长度限制。
+Check:
+	iaddq -10, %rdx
+	jl Post
+Loop: 
+Load:mrmovq (%rdi), %rbx
+	mrmovq 8(%rdi), %rcx
+	mrmovq 16(%rdi), %rbp
+	mrmovq 24(%rdi), %r8
+	mrmovq 32(%rdi), %r9
+	mrmovq 40(%rdi), %r10
+	mrmovq 48(%rdi), %r11
+	mrmovq 56(%rdi), %r12
+	mrmovq 64(%rdi), %r13
+	mrmovq 72(%rdi), %r14
+	caddtq 1, %rbx  # control add template
+	caddtq 1, %rcx
+	caddtq 1, %rbp
+	caddtq 1, %r8
+	caddtq 1, %r9
+	caddtq 1, %r10
+	caddtq 1, %r11
+	caddtq 1, %r12
+	caddtq 1, %r13
+	caddtq 1, %r14
+Store: rmmovq %rbx, (%rsi)
+	rmmovq %rcx, 8(%rsi)
+	rmmovq %rbp, 16(%rsi)
+	rmmovq %r8, 24(%rsi)
+	rmmovq %r9, 32(%rsi)
+	rmmovq %r10, 40(%rsi)
+	rmmovq %r11, 48(%rsi)
+	rmmovq %r12, 56(%rsi)
+	rmmovq %r13, 64(%rsi)
+	rmmovq %r14, 72(%rsi)
+Update: iaddq 80, %rdi
+	iaddq 80, %rsi
+	iaddq -10, %rdx  # 利用iaddq置CC的特性
+	jge Loop
+
+Post: # 此时%rdx为剩余元素个数-10，n-10
+	# addq %rdx, %rdx
+	# addq %rdx, %rdx
+	# addq %rdx, %rdx  # quad的单位是8b，实际偏移要乘以8，这里三个addq就是为了乘以8。
+    shlq 3, %rdx
+	mrmovq jump_table(%rdx), %rdx # 将JT[n-10]处的地址赋予%rdx； 注意JT倒着放，JT[-1]是MOV9
+	pushq %rdx     # pushq+ret替代jmp
+	ret
+		.quad MOV0
+		.quad MOV1
+		.quad MOV2
+		.quad MOV3
+		.quad MOV4
+		.quad MOV5
+		.quad MOV6
+		.quad MOV7
+		.quad MOV8
+		.quad MOV9
+	jump_table:
+
+	# MOV9
+# 倒着移动，MOV9移动第9个元素，随即MOV8移动第8个元素
+MOV9: mrmovq 64(%rdi), %r8
+	rmmovq %r8, 64(%rsi) # 实现了load forward，无暂停
+	caddtq 1, %r8
+MOV8: mrmovq 56(%rdi), %r8
+	rmmovq %r8, 56(%rsi)
+	caddtq 1, %r8
+MOV7: mrmovq 48(%rdi), %r8
+	rmmovq %r8, 48(%rsi)
+	caddtq 1, %r8
+MOV6: mrmovq 40(%rdi), %r8
+	rmmovq %r8, 40(%rsi)
+	caddtq 1, %r8
+MOV5: mrmovq 32(%rdi), %r8
+	rmmovq %r8, 32(%rsi)
+	caddtq 1, %r8
+MOV4: mrmovq 24(%rdi), %r8
+	rmmovq %r8, 24(%rsi)
+	caddtq 1, %r8
+MOV3: mrmovq 16(%rdi), %r8
+	rmmovq %r8, 16(%rsi)
+	caddtq 1, %r8
+MOV2: mrmovq 8(%rdi), %r8
+	rmmovq %r8, 8(%rsi)
+	caddtq 1, %r8
+MOV1: mrmovq (%rdi), %r8
+	rmmovq %r8, (%rsi)
+	caddtq 1, %r8
+MOV0:
+##################################################################
+# Do not modify the following section of code
+# Function epilogue.
+Done:
+	ret
+##################################################################
+# Keep the following label at the end of your function
+End:
+#/* $end ncopy-ys */
