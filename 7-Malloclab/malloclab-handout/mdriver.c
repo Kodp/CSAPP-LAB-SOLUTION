@@ -25,12 +25,6 @@
 /**********************
  * Constants and macros
  **********************/
-
-// 衡量时间时，执行的重复次数。
-// 可视化或调试时设置为1
-#define REPEAT 10
-
-
 /* Misc */
 #define MAXLINE 1024       /* max string size */
 #define HDRLINES 4         /* number of header lines in a trace file */
@@ -133,6 +127,11 @@ static void usage(void);
 static void unix_error(char* msg);
 static void malloc_error(int tracenum, int opnum, char* msg);
 static void app_error(char* msg);
+
+
+int cmp(const void* a, const void* b) {
+    return (*(double*)a > *(double*)b) ? 1 : -1;
+}
 
 /**************
  * Main routine
@@ -260,10 +259,28 @@ int main(int argc, char** argv) {
                 speed_params.trace = trace;
                 if (verbose > 1)
                     printf("and performance.\n");
-                //& 修改框架代码：添加多次重复取平均值。
-                for (int r = 0; r < REPEAT; ++ r)
-                    libc_stats[i].secs += fsecs(eval_libc_speed, &speed_params);
-                libc_stats[i].secs /= REPEAT;
+                //& 修改框架代码：多次重复，取Kbest平均值
+                int k = REPEAT > 3 ? 3 : 1;
+                double results[REPEAT];
+
+                // 1. 多次运行并记录结果
+                for (int r = 0; r < REPEAT; ++r) {
+                    double secs = fsecs(eval_libc_speed, &speed_params);
+                    results[r] = secs;
+                }
+
+                // 2. 排序（升序：从小到大）
+                // 改用更高效的 qsort
+                qsort(results, REPEAT, sizeof(double), cmp);
+
+                // 3. 取最好的 k 个做平均
+                double sum = 0.0;
+                for (int j = 0; j < k; ++j) {
+                    sum += results[j]; // 累加前k小的值
+                }
+
+                // 4. 存储当前测试项的结果（使用外层循环的 i）
+                libc_stats[i].secs = sum / k;
             }
             free_trace(trace);
         }
@@ -305,9 +322,30 @@ int main(int argc, char** argv) {
             if (verbose > 1)
                 printf("and performance.\n");
             //& 修改框架代码：添加多次重复取平均值。
-            for (int r = 0; r < REPEAT; ++ r)
-                mm_stats[i].secs += fsecs(eval_mm_speed, &speed_params);
-            mm_stats[i].secs /= REPEAT;
+            int k = REPEAT > 3 ? 3 : 1;
+            double results[REPEAT];
+
+            // 1. 多次运行并记录结果
+            for (int r = 0; r < REPEAT; ++r) {
+                double secs = fsecs(eval_mm_speed, &speed_params);
+                results[r] = secs;
+            }
+
+            // 2. 排序（升序：从小到大）
+            // 改用更高效的 qsort
+            qsort(results, REPEAT, sizeof(double), cmp);
+
+            // 3. 取最好的 k 个做平均
+            double sum = 0.0;
+            for (int j = 0; j < k; ++j) {
+                sum += results[j]; // 累加前k小的值
+            }
+
+            // 4. 存储当前测试项的结果（使用外层循环的 i）
+            mm_stats[i].secs = sum / k;
+            // for (int r = 0; r < REPEAT; ++ r)
+            //     mm_stats[i].secs += fsecs(eval_mm_speed, &speed_params);
+            // mm_stats[i].secs /= REPEAT;
         }
         free_trace(trace);
     }
@@ -370,6 +408,17 @@ int main(int argc, char** argv) {
  * track of the extent of every allocated block payload. We use the
  * range list to detect any overlapping allocated blocks.
  ****************************************************************/
+
+/*
+ * reinit_trace - get the trace ready for another run.
+ */
+static void reinit_trace(trace_t *trace)
+{
+    memset(trace->blocks, 0, trace->num_ids * sizeof(*trace->blocks));
+    memset(trace->block_sizes, 0, trace->num_ids * sizeof(*trace->block_sizes));
+    /* block_rand_base is unused if size is zero */
+}
+
 
 /*
  * add_range - As directed by request opnum in trace tracenum,
@@ -486,7 +535,7 @@ static trace_t* read_trace(char* tracedir, char* filename) {
         sprintf(msg, "Could not open %s in read_trace", path);
         unix_error(msg);
     }
-    int __ret;  // 用于糊弄编译器，移除错误提示（框架代码尽可能少修改）
+    int __ret;  // __ret接收值用于糊弄编译器，移除错误提示（框架代码尽可能少修改）
     __ret = fscanf(tracefile, "%d", &(trace->sugg_heapsize)); /* not used */
     __ret = fscanf(tracefile, "%d", &(trace->num_ids));
     __ret = fscanf(tracefile, "%d", &(trace->num_ops));
@@ -533,14 +582,17 @@ static trace_t* read_trace(char* tracedir, char* filename) {
             exit(1);
         }
         op_index++;
+        if(op_index == trace->num_ops) break;
     }
     fclose(tracefile);
     assert(max_index == trace->num_ids - 1);
-    // assert(trace->num_ops == op_index);
+    
     if (trace->num_ops != op_index) {
+        printf("trace->num_ops: %d, op_index: %d\n", trace->num_ops, op_index);
         printf("Error: %s\n",filename);
         exit(1);
     }
+    assert(trace->num_ops == op_index);
 
     (void)__ret;
     return trace;
@@ -577,7 +629,7 @@ static int eval_mm_valid(trace_t* trace, int tracenum, range_t** ranges) {
     /* Reset the heap and free any records in the range list */
     mem_reset_brk();
     clear_ranges(ranges);
-
+    reinit_trace(trace);
     /* Call the mm package's init function */
     if (mm_init() < 0) {
         malloc_error(tracenum, 0, "mm_init failed.");
@@ -623,8 +675,14 @@ static int eval_mm_valid(trace_t* trace, int tracenum, range_t** ranges) {
 
             /* Call the student's realloc */
             oldp = trace->blocks[index];
-            if ((newp = mm_realloc(oldp, size)) == NULL) {
-                malloc_error(tracenum, i, "mm_realloc failed.");
+            newp = mm_realloc(oldp, size);
+            if ((newp == NULL) && (size != 0) ) {
+                malloc_error(trace, i, "mm_realloc failed.");
+                return 0;
+            }
+            if ((newp != NULL) && (size == 0) ) {
+                malloc_error(trace, i, "mm_realloc with size 0 returned "
+                             "non-NULL.");
                 return 0;
             }
 
@@ -632,9 +690,11 @@ static int eval_mm_valid(trace_t* trace, int tracenum, range_t** ranges) {
             remove_range(ranges, oldp);
 
             /* Check new block for correctness and add it to range list */
-            if (add_range(ranges, newp, size, tracenum, i) == 0)
-                return 0;
 
+            if (size > 0) {
+                if(add_range(ranges, newp, size, tracenum, i) == 0)
+                    return 0;
+            }
             /* ADDED: cgw
              * Make sure that the new block contains the data from the old
              * block and then fill in the new block with the low order byte
@@ -644,7 +704,12 @@ static int eval_mm_valid(trace_t* trace, int tracenum, range_t** ranges) {
             if (size < oldsize)
                 oldsize = size;
             for (j = 0; j < oldsize; j++) {
-                if (newp[j] != (index & 0xFF)) {
+                // 框架代码bug：用有符号（左）和无符号比较，导致位相同但有符号为负数时比较失败
+                // 修正：添加类型转换。
+                // 原始测试样例没出错的原因是，那两个样例（realloc，realloc2）只会重分配编号为0的块，不超过127。
+                if ((unsigned char)newp[j] != (index & 0xFF)) {  
+                    printf("newp[j] = %d, index = %02x, tracenum = %d, i = %d\n",
+                          newp[j], index, tracenum, i);
                     malloc_error(tracenum, i,
                                  "mm_realloc did not preserve the "
                                  "data from old block");
@@ -659,7 +724,9 @@ static int eval_mm_valid(trace_t* trace, int tracenum, range_t** ranges) {
             break;
 
         case FREE: /* mm_free */
-
+            if (index < 0) {
+                continue; /* 忽略无效的 free 操作 */
+            }
             /* Remove region from list and call student's free function */
             p = trace->blocks[index];
             remove_range(ranges, p);
@@ -696,6 +763,7 @@ static double eval_mm_util(trace_t* trace, int tracenum, range_t** ranges) {
     char *newp, *oldp;
 
     /* initialize the heap and the mm malloc package */
+    reinit_trace(trace);
     mem_reset_brk();
     if (mm_init() < 0)
         app_error("mm_init failed in eval_mm_util");
@@ -728,7 +796,7 @@ static double eval_mm_util(trace_t* trace, int tracenum, range_t** ranges) {
             oldsize = trace->block_sizes[index];
 
             oldp = trace->blocks[index];
-            if ((newp = mm_realloc(oldp, newsize)) == NULL)
+            if ((newp = mm_realloc(oldp,newsize)) == NULL && newsize != 0) 
                 app_error("mm_realloc failed in eval_mm_util");
 
             /* Remember region and size */
@@ -745,6 +813,9 @@ static double eval_mm_util(trace_t* trace, int tracenum, range_t** ranges) {
 
         case FREE: /* mm_free */
             index = trace->ops[i].index;
+            if (index < 0) {
+                continue;
+            }
             size = trace->block_sizes[index];
             p = trace->blocks[index];
 
@@ -774,12 +845,13 @@ static void eval_mm_speed(void* ptr) {
     trace_t* trace = ((speed_t*)ptr)->trace;
 
     /* Reset the heap and initialize the mm package */
+    reinit_trace(trace);
     mem_reset_brk();
     if (mm_init() < 0)
         app_error("mm_init failed in eval_mm_speed");
 
     /* Interpret each trace request */
-    for (i = 0; i < trace->num_ops; i++)
+    for (i = 0; i < trace->num_ops; i++) {
         switch (trace->ops[i].type) {
 
         case ALLOC: /* mm_malloc */
@@ -794,13 +866,16 @@ static void eval_mm_speed(void* ptr) {
             index = trace->ops[i].index;
             newsize = trace->ops[i].size;
             oldp = trace->blocks[index];
-            if ((newp = mm_realloc(oldp, newsize)) == NULL)
-                app_error("mm_realloc error in eval_mm_speed");
+            if ((newp = mm_realloc(oldp,newsize)) == NULL && newsize != 0) 
+                app_error("mm_realloc error in eval_mm_speed");       
             trace->blocks[index] = newp;
             break;
 
         case FREE: /* mm_free */
             index = trace->ops[i].index;
+            if (index < 0) {
+                continue;
+            }
             block = trace->blocks[index];
             mm_free(block);
             break;
@@ -808,6 +883,7 @@ static void eval_mm_speed(void* ptr) {
         default:
             app_error("Nonexistent request type in eval_mm_valid");
         }
+    }
 }
 
 /*
@@ -819,6 +895,8 @@ static void eval_mm_speed(void* ptr) {
 static int eval_libc_valid(trace_t* trace, int tracenum) {
     int i, newsize;
     char *p, *newp, *oldp;
+
+    reinit_trace(trace);
 
     for (i = 0; i < trace->num_ops; i++) {
         switch (trace->ops[i].type) {
@@ -834,7 +912,7 @@ static int eval_libc_valid(trace_t* trace, int tracenum) {
         case REALLOC: /* realloc */
             newsize = trace->ops[i].size;
             oldp = trace->blocks[trace->ops[i].index];
-            if ((newp = realloc(oldp, newsize)) == NULL) {
+            if ((newp = realloc(oldp, newsize)) == NULL && newsize != 0)  {
                 malloc_error(tracenum, i, "libc realloc failed");
                 unix_error("System message");
             }
@@ -842,7 +920,11 @@ static int eval_libc_valid(trace_t* trace, int tracenum) {
             break;
 
         case FREE: /* free */
-            free(trace->blocks[trace->ops[i].index]);
+            if (trace->ops[i].index >= 0) {
+                free(trace->blocks[trace->ops[i].index]);
+            } else {
+                free(0);
+            }
             break;
 
         default:
@@ -864,6 +946,8 @@ static void eval_libc_speed(void* ptr) {
     char *p, *newp, *oldp, *block;
     trace_t* trace = ((speed_t*)ptr)->trace;
 
+    reinit_trace(trace);
+
     for (i = 0; i < trace->num_ops; i++) {
         switch (trace->ops[i].type) {
         case ALLOC: /* malloc */
@@ -878,7 +962,7 @@ static void eval_libc_speed(void* ptr) {
             index = trace->ops[i].index;
             newsize = trace->ops[i].size;
             oldp = trace->blocks[index];
-            if ((newp = realloc(oldp, newsize)) == NULL)
+            if ((newp = realloc(oldp, newsize)) == NULL && newsize != 0)
                 unix_error("realloc failed in eval_libc_speed\n");
 
             trace->blocks[index] = newp;
@@ -886,8 +970,12 @@ static void eval_libc_speed(void* ptr) {
 
         case FREE: /* free */
             index = trace->ops[i].index;
-            block = trace->blocks[index];
-            free(block);
+            if (index >= 0) {
+                block = trace->blocks[index];
+                free(block);
+            } else {
+                free(0);
+            }
             break;
         }
     }
