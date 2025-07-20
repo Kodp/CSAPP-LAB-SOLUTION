@@ -1,47 +1,33 @@
+./mdriver -v
 Team Name:Steam
-Member 1 :YeLin:P29123@126.com
+Member 1 :syh:P29123@126.com
 Using default tracefiles in traces/
 Measuring performance with gettimeofday().
-
-Results for libc malloc:
-trace  valid  util     ops        secs    Kops  total secs
- 0       yes    0%    5694    0.000154   36871    0.015443
- 1       yes    0%    5848    0.000110   53111    0.011011
- 2       yes    0%    6648    0.000320   20802    0.031959
- 3       yes    0%    5380    0.000306   17605    0.030559
- 4       yes    0%   14400    0.000159   90300    0.015947
- 5       yes    0%    4800    0.000192   25025    0.019181
- 6       yes    0%    4800    0.000191   25158    0.019079
- 7       yes    0%   12000    0.000123   97683    0.012285
- 8       yes    0%   24000    0.000186  128868    0.018624
- 9       yes    0%   14401    0.000343   42023    0.034269
-10       yes    0%   14401    0.000080  180633    0.007973
-Total           0%  112372    0.002163   51945    0.216328
-max total size: 2012279, heap size: 2023832
-max total size: 1679165, heap size: 1685560
-max total size: 3165325, heap size: 3179864
-max total size: 3421135, heap size: 3435880
-max total size: 8190, heap size: 8464
-max total size: 14939697, heap size: 15817600
-max total size: 14432586, heap size: 15360968
-max total size: 1152000, heap size: 1184256
-max total size: 576000, heap size: 640208
-max total size: 615040, heap size: 615704
-max total size: 28119, heap size: 28352
+max total size: 2012279, heap size: 2023768
+max total size: 1679165, heap size: 1697736
+max total size: 3165325, heap size: 3204280
+max total size: 3421135, heap size: 3434480
+max total size: 8190, heap size: 8400
+max total size: 14939697, heap size: 16025808
+max total size: 14432586, heap size: 15444128
+max total size: 1152000, heap size: 1184192
+max total size: 576000, heap size: 640144
+max total size: 615040, heap size: 615640
+max total size: 28119, heap size: 28288
 
 Results for mm malloc:
 trace  valid  util     ops        secs    Kops  total secs
- 0       yes   99%    5694    0.000039  147750    0.003854
- 1       yes  100%    5848    0.000038  152546    0.003834
- 2       yes  100%    6648    0.000046  145045    0.004583
- 3       yes  100%    5380    0.000036  148226    0.003630
- 4       yes   97%   14400    0.000077  186913    0.007704
- 5       yes   94%    4800    0.000069   69822    0.006875
- 6       yes   94%    4800    0.000073   65947    0.007279
- 7       yes   97%   12000    0.000066  182793    0.006565
- 8       yes   90%   24000    0.000135  178039    0.013480
- 9       yes  100%   14401    0.000061  236105    0.006099
-10       yes   99%   14401    0.000047  307694    0.004680
-Total          97%  112372    0.000686  163850    0.068582
+ 0       yes   99%    5694    0.000034  168163    0.000339
+ 1       yes   99%    5848    0.000032  183726    0.000318
+ 2       yes   99%    6648    0.000036  183697    0.000362
+ 3       yes  100%    5380    0.000029  188441    0.000285
+ 4       yes   98%   14400    0.000060  241976    0.000595
+ 5       yes   93%    4800    0.000082   58189    0.000825
+ 6       yes   93%    4800    0.000075   64300    0.000746
+ 7       yes   97%   12000    0.000057  212164    0.000566
+ 8       yes   90%   24000    0.000120  199617    0.001202
+ 9       yes  100%   14401    0.000050  285677    0.000504
+10       yes   99%   14401    0.000039  372890    0.000386
+Total          97%  112372    0.000613  183345    0.006129
 
 Perf index = 58 (util) + 40 (thru) = 98/100
